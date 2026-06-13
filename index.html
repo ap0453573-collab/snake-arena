@@ -2,14 +2,15 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, shrink-to-fit=no">
     <title>Snake Arena - Emoji Tournament Edition</title>
     <style>
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
-            touch-action: none; /* Prevents mobile double-tap zoom and scrolling */
+            /* Prevents blue tap highlights on mobile devices */
+            -webkit-tap-highlight-color: transparent;
         }
         body, html {
             width: 100%;
@@ -19,6 +20,7 @@
             font-family: 'Segoe UI', Arial, sans-serif;
             user-select: none;
             -webkit-user-select: none;
+            touch-action: none; /* Disables double-tap-to-zoom completely at browser level */
         }
         canvas {
             position: absolute;
@@ -28,6 +30,7 @@
             height: 100vh;
             display: block;
             z-index: 1;
+            touch-action: none;
         }
         #ui-layer {
             position: absolute;
@@ -40,6 +43,23 @@
             pointer-events: none;
             display: none;
         }
+
+        #boost-notifier {
+            margin-top: 6px;
+            font-size: 13px;
+            letter-spacing: 1px;
+            font-weight: 800;
+            text-transform: uppercase;
+            transition: all 0.2s ease;
+        }
+        .boost-charging { color: #a4b0be; opacity: 0.6; }
+        .boost-ready { color: #00ff88; text-shadow: 0 0 8px rgba(0,255,136,0.6); animation: pulseAlert 1s infinite alternate; }
+        .boost-active { color: #00f2fe; text-shadow: 0 0 12px rgba(0,242,254,0.8); }
+
+        @keyframes pulseAlert {
+            0% { opacity: 0.6; }
+            100% { opacity: 1; }
+        }
         
         .screen-overlay {
             position: absolute;
@@ -51,36 +71,41 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: center;
+            justify-content: flex-start;
             z-index: 10;
             color: white;
             text-align: center;
-            padding: 15px;
+            padding: 20px 15px;
             overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            touch-action: pan-y; /* Permits UI scrolling while protecting game environment */
         }
         
         h1 {
-            font-size: clamp(32px, 8vw, 50px);
+            font-size: clamp(28px, 8vw, 50px);
             font-weight: 900;
             background: linear-gradient(45deg, #00ff88, #00f2fe);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             margin-bottom: 5px;
             letter-spacing: 1px;
+            flex-shrink: 0;
         }
         
         .subtitle {
             color: #a4b0be;
-            font-size: clamp(12px, 4vw, 16px);
+            font-size: clamp(11px, 3.5vw, 15px);
             margin-bottom: 15px;
+            flex-shrink: 0;
         }
 
         .name-input-container {
-            margin-bottom: 15px;
+            margin-bottom: 12px;
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 5px;
+            gap: 4px;
+            flex-shrink: 0;
         }
         .name-input-container label {
             font-size: 11px;
@@ -113,12 +138,13 @@
             margin-bottom: 12px;
             flex-wrap: wrap;
             justify-content: center;
+            flex-shrink: 0;
         }
         .tab-btn {
             background: rgba(255, 255, 255, 0.08);
             border: 1px solid rgba(255, 255, 255, 0.15);
             color: #dcdde1;
-            padding: 6px 14px;
+            padding: 8px 14px; /* Slightly padded for mobile target accuracy */
             font-size: 12px;
             font-weight: bold;
             border-radius: 20px;
@@ -134,12 +160,12 @@
         .custom-box {
             background: rgba(255, 255, 255, 0.04);
             border: 1px solid rgba(255, 255, 255, 0.1);
-            padding: 15px;
+            padding: 12px;
             border-radius: 16px;
-            margin-bottom: 25px;
+            margin-bottom: 20px;
             width: 100%;
             max-width: 500px;
-            min-height: 140px;
+            flex-shrink: 0;
         }
         .grid-view {
             display: flex;
@@ -149,14 +175,16 @@
             max-height: 160px;
             overflow-y: auto;
             padding-right: 3px;
+            -webkit-overflow-scrolling: touch;
+            touch-action: pan-y;
         }
 
         .grid-view::-webkit-scrollbar { width: 4px; }
         .grid-view::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 10px; }
         
         .color-btn {
-            width: 38px;
-            height: 38px;
+            width: 42px; /* Amplified hit targets for fat thumbs */
+            height: 42px;
             border-radius: 50%;
             border: 3px solid transparent;
             cursor: pointer;
@@ -167,7 +195,7 @@
             background: rgba(255, 255, 255, 0.07);
             border: 2px solid rgba(255, 255, 255, 0.15);
             color: #fff;
-            padding: 6px 12px;
+            padding: 8px 14px;
             border-radius: 12px;
             cursor: pointer;
             font-size: 14px;
@@ -184,24 +212,25 @@
             background: linear-gradient(45deg, #00ff88, #00ee77);
             color: #070614;
             border: none;
-            padding: 12px 36px;
+            padding: 14px 40px;
             font-size: 18px;
             font-weight: bold;
             border-radius: 40px;
             cursor: pointer;
             box-shadow: 0 5px 20px rgba(0, 255, 136, 0.3);
+            flex-shrink: 0;
+            margin-bottom: 15px;
         }
         .action-btn.secondary {
             background: linear-gradient(45deg, #70a1ff, #1e90ff);
             color: white;
             box-shadow: 0 5px 20px rgba(30, 144, 255, 0.3);
         }
-        .btn-group { display: flex; gap: 15px; justify-content: center; }
+        .btn-group { display: flex; gap: 15px; justify-content: center; flex-shrink: 0; width: 100%; max-width: 400px;}
 
         #game-over-screen h1 { color: #ff4757; background: none; -webkit-text-fill-color: #ff4757; }
         #final-score { font-size: 20px; margin-bottom: 25px; color: #a4b0be; }
 
-        /* Virtual Joystick Indicator Layer for Mobile Only */
         #touch-indicator {
             position: absolute;
             width: 60px;
@@ -217,12 +246,16 @@
 </head>
 <body>
 
-    <div id="ui-layer">Score: <span id="score">0</span></div>
+    <div id="ui-layer">
+        <div>Score: <span id="score">0</span></div>
+        <div id="boost-notifier" class="boost-charging">Boost Charging...</div>
+    </div>
+    
     <div id="touch-indicator"></div>
 
     <div id="start-screen" class="screen-overlay">
         <h1>SNAKE ARENA</h1>
-        <div class="subtitle">Mobile Touch & Emoji Edition</div>
+        <div class="subtitle">Double Tap / Left Click to Boost (Every 1 min)</div>
         
         <div class="name-input-container">
             <label for="playerNameInput">Warrior Nickname</label>
@@ -244,7 +277,7 @@
         <button class="action-btn" onclick="startGame()">Enter Arena</button>
     </div>
 
-    <div id="game-over-screen" class="screen-overlay" style="display: none;">
+    <div id="game-over-screen" class="screen-overlay" style="display: none; justify-content: center;">
         <h1>GAME OVER</h1>
         <div id="final-score">Score: 0</div>
         
@@ -261,6 +294,7 @@
         const ctx = canvas.getContext("2d", { alpha: false }); 
         const scoreElement = document.getElementById("score");
         const uiLayer = document.getElementById("ui-layer");
+        const boostNotifier = document.getElementById("boost-notifier");
         const startScreen = document.getElementById("start-screen");
         const gameOverScreen = document.getElementById("game-over-screen");
         const finalScoreElement = document.getElementById("final-score");
@@ -278,14 +312,24 @@
         let activeTab = 'colors'; 
         
         const thickness = 14;
-        const snakeSpeed = 4.2;
+        const baseSnakeSpeed = 4.2;
         const attackRange = 220;
         const dangerSensorRange = 75;
+
+        const arenaWidth = 4000;
+        const arenaHeight = 3000;
 
         let player;
         let npcs = [];
         let foodArray = [];
         const cacheMap = {};
+
+        // Boost Engine Tracker Metrics
+        let lastBoostTime = 0; 
+        let boostActiveUntil = 0; 
+        const boostCooldownMs = 60000; 
+        const boostDurationMs = 3000;  
+        let lastTapTime = 0;           
 
         const clothingColors = [
             { hex: "#00ff88", name: "Green" }, { hex: "#00f2fe", name: "Cyan" },
@@ -297,24 +341,26 @@
             { id: "USA", emoji: "🇺🇸", name: "USA" }, { id: "GB", emoji: "🇬🇧", name: "UK" },
             { id: "FR", emoji: "🇫🇷", name: "FR" }, { id: "DE", emoji: "🇩🇪", name: "DE" },
             { id: "CA", emoji: "🇨🇦", name: "CA" }, { id: "BR", emoji: "🇧🇷", name: "BR" },
-            { id: "IN", emoji: "🇮🇳", name: "IN" }, { id: "JP", emoji: "🇯🇵", name: "JP" }
+            { id: "IN", emoji: "🇮🇳", name: "IN" }, { id: "JP", emoji: "🇯🇵", name: "JP" },
+            { id: "IT", emoji: "🇮🇹", name: "IT" }, { id: "ES", emoji: "🇪🇸", name: "ES" },
+            { id: "MX", emoji: "🇲🇽", name: "MX" }, { id: "KR", emoji: "🇰🇷", name: "KR" },
+            { id: "AU", emoji: "🇦🇺", name: "AU" }
         ];
 
-        // 40+ Emojis sorted by category arrays
         const emojiCategories = {
-            emoji_smilies: ["😀","😃","😄","😁","😆","😅","😂","🤣","😊","😇","🙂","🙃","😉","😌","😍","🥰","😘","😜","🤪","😝","🤑","🤗"],
-            emoji_warriors: ["😎","🤓","🧐","🤠","🥳","🤡","👹","👺","👻","👽","🤖","👑","⚔️","🥷","🦸","🦹","🔥","⚡","💎"],
-            emoji_animals: ["🦁","🐯","🐱","🐶","🐺","🐻","🐼","🐨","🦄","🐮","🐷","🐸","🐵","🐔","🐧","🦆","🦅","🦉","🦇","👑"]
+            emoji_smilies: ["😀","😃","😄","😁","😆","😅","😂","🤣","😊","😇","🙂","🙃","😉","😌","😍","🥰","😘","😜","🤪","😝","🤑","🤗","🤫","🤔","🤐","🤨","😏","🥳"],
+            emoji_warriors: ["😎","🤓","🧐","🤠","🥳","🤡","👹","👺","👻","👽","🤖","👑","⚔️","🥷","🦸","🦹","🔥","⚡","💎","💀","☠️","😈","👿","👹","🌟"],
+            emoji_animals: ["🦁","🐯","🐱","🐶","🐺","🐻","🐼","🐨","🦄","🐮","🐷","🐸","🐵","🐔","🐧","🦆","🦅","🦉","🦇","👑","🐉","🐲","🐍","🦎","🐙"]
         };
 
-        const npcNames = ["Goku", "Vegeta", "Trunks", "Frieza", "Broly", "Piccolo", "Gohan", "Luffy", "Naruto", "Sasuke", "Zoro"];
+        const npcNames = ["Goku", "Vegeta", "Trunks", "Frieza", "Broly", "Piccolo", "Gohan", "Luffy", "Naruto", "Sasuke", "Zoro", "Nami", "Sanji", "Chopper", "Robin", "Franky", "Brook", "Jinbe", "Ace", "Sabo", "Shanks"];
 
         let selectedSkin = { type: 'color', val: '#00ff88' }; 
         let selectedEmojiFace = "😀"; 
 
         function forceResize() {
-            canvas.width = window.innerWidth || 1280;
-            canvas.height = window.innerHeight || 720;
+            canvas.width = window.innerWidth || 800;
+            canvas.height = window.innerHeight || 600;
         }
         window.addEventListener('resize', forceResize);
         window.addEventListener('orientationchange', () => setTimeout(forceResize, 200));
@@ -353,6 +399,21 @@
                 } else if (fid === "JP") {
                     oCtx.fillStyle = "#ffffff"; oCtx.fillRect(0, 0, size, size); oCtx.fillStyle = "#ff4757";
                     oCtx.beginPath(); oCtx.arc(radius, radius, radius * 0.45, 0, Math.PI * 2); oCtx.fill();
+                } else if (fid === "IT") {
+                    oCtx.fillStyle = "#10ac84"; oCtx.fillRect(0, 0, size * 0.34, size); oCtx.fillStyle = "#ffffff";
+                    oCtx.fillRect(size * 0.34, 0, size * 0.34, size); oCtx.fillStyle = "#ff4757"; oCtx.fillRect(size * 0.68, 0, size * 0.34, size);
+                } else if (fid === "ES") {
+                    oCtx.fillStyle = "#ff4757"; oCtx.fillRect(0, 0, size, size * 0.25); oCtx.fillStyle = "#ffa502";
+                    oCtx.fillRect(0, size * 0.25, size, size * 0.5); oCtx.fillStyle = "#ff4757"; oCtx.fillRect(0, size * 0.75, size, size * 0.25);
+                } else if (fid === "MX") {
+                    oCtx.fillStyle = "#10ac84"; oCtx.fillRect(0, 0, size * 0.34, size); oCtx.fillStyle = "#ffffff";
+                    oCtx.fillRect(size * 0.34, 0, size * 0.34, size); oCtx.fillStyle = "#ff4757"; oCtx.fillRect(size * 0.68, 0, size * 0.34, size);
+                } else if (fid === "KR") {
+                    oCtx.fillStyle = "#ffffff"; oCtx.fillRect(0, 0, size, size); oCtx.fillStyle = "#ff4757";
+                    oCtx.beginPath(); oCtx.arc(radius, radius, radius * 0.35, 0, Math.PI * 2); oCtx.fill();
+                } else if (fid === "AU") {
+                    oCtx.fillStyle = "#0a3d62"; oCtx.fillRect(0, 0, size, size); oCtx.fillStyle = "#ffffff";
+                    oCtx.fillRect(0, 0, radius, 3); oCtx.fillRect(0, 0, 3, radius);
                 }
                 cacheMap[fid] = offCanvas;
             });
@@ -404,18 +465,23 @@
                 this.isNPC = isNPC;
                 this.name = explicitName || (isNPC ? npcNames[Math.floor(Math.random() * npcNames.length)] : "Snake");
                 this.angle = Math.random() * Math.PI * 2;
-                this.targetLength = 25;
+                this.targetLength = 20;
                 this.parts = Array.from({ length: this.targetLength }, () => ({ x, y }));
                 
                 if(this.isNPC) {
-                    // Pick a random emoji expression for NPC snakes
-                    const allNPCList = [...emojiCategories.emoji_smilies, ...emojiCategories.emoji_warriors];
+                    const allNPCList = [...emojiCategories.emoji_smilies, ...emojiCategories.emoji_warriors, ...emojiCategories.emoji_animals];
                     this.npcEmoji = allNPCList[Math.floor(Math.random() * allNPCList.length)];
+                    if(Math.random() < 0.3 && flagSkins.length > 0) {
+                        this.skin = { type: 'flag', val: flagSkins[Math.floor(Math.random() * flagSkins.length)].id };
+                    }
                 }
             }
 
             update() {
                 let head = this.parts[0];
+                if (!head) return;
+
+                let currentSpeed = baseSnakeSpeed;
 
                 if (!this.isNPC) {
                     if (inMenu) {
@@ -423,10 +489,16 @@
                         this.skin = selectedSkin; 
                         this.name = playerNameInput.value.trim() || "Player";
                         mouse.x = canvas.width / 2; mouse.y = canvas.height / 2 - 60;
+                        currentSpeed = 1.5;
                     } else {
-                        let dist = Math.hypot(mouse.x - head.x, mouse.y - head.y);
+                        let worldMouseX = mouse.x + (head.x - canvas.width / 2);
+                        let worldMouseY = mouse.y + (head.y - canvas.height / 2);
+                        let dist = Math.hypot(worldMouseX - head.x, worldMouseY - head.y);
                         if (dist > 4) {
-                            this.angle = Math.atan2(mouse.y - head.y, mouse.x - head.x);
+                            this.angle = Math.atan2(worldMouseY - head.y, worldMouseX - head.x);
+                        }
+                        if (Date.now() < boostActiveUntil) {
+                            currentSpeed = baseSnakeSpeed * 1.75; 
                         }
                     }
                 } else {
@@ -434,7 +506,7 @@
                     let sx = head.x + Math.cos(this.angle) * dangerSensorRange;
                     let sy = head.y + Math.sin(this.angle) * dangerSensorRange;
 
-                    if (gameStarted && !gameOver) {
+                    if (gameStarted && !gameOver && player && player.parts[0]) {
                         player.parts.forEach((p, i) => {
                             if (i > 1 && Math.hypot(sx - p.x, sy - p.y) < thickness * 2.5) danger = true;
                         });
@@ -450,12 +522,12 @@
                         this.angle += Math.PI / 2;
                     } else {
                         let target = null; let minDist = attackRange;
-                        if (!gameOver && gameStarted) {
+                        if (!gameOver && gameStarted && player && player.parts[0]) {
                             let d = Math.hypot(head.x - player.parts[0].x, head.y - player.parts[0].y);
                             if (d < minDist) { minDist = d; target = player.parts[0]; }
                         }
                         npcs.forEach(npc => {
-                            if (npc.id !== this.id) {
+                            if (npc.id !== this.id && npc.parts[0]) {
                                 let d = Math.hypot(head.x - npc.parts[0].x, head.y - npc.parts[0].y);
                                 if (d < minDist) { minDist = d; target = npc.parts[0]; }
                             }
@@ -470,28 +542,35 @@
                     }
                 }
 
-                let activeSpeed = inMenu && !this.isNPC ? 1.5 : snakeSpeed;
-                let newHead = { x: head.x + Math.cos(this.angle) * activeSpeed, y: head.y + Math.sin(this.angle) * activeSpeed };
+                let newHead = { x: head.x + Math.cos(this.angle) * currentSpeed, y: head.y + Math.sin(this.angle) * currentSpeed };
                 this.parts.unshift(newHead);
                 
                 while (this.parts.length > this.targetLength) this.parts.pop();
 
-                if (head.x < -thickness) { head.x = canvas.width + thickness; this.parts.forEach(p => p.x += canvas.width); }
-                else if (head.x > canvas.width + thickness) { head.x = -thickness; this.parts.forEach(p => p.x -= canvas.width); }
-                if (head.y < -thickness) { head.y = canvas.height + thickness; this.parts.forEach(p => p.y += canvas.height); }
-                else if (head.y > canvas.height + thickness) { head.y = -thickness; this.parts.forEach(p => p.y -= canvas.height); }
+                if (head.x < -thickness) { head.x = arenaWidth + thickness; this.parts.forEach(p => p.x += arenaWidth); }
+                else if (head.x > arenaWidth + thickness) { head.x = -thickness; this.parts.forEach(p => p.x -= arenaWidth); }
+                if (head.y < -thickness) { head.y = arenaHeight + thickness; this.parts.forEach(p => p.y += arenaHeight); }
+                else if (head.y > arenaHeight + thickness) { head.y = -thickness; this.parts.forEach(p => p.y -= arenaHeight); }
             }
 
             draw() {
+                let head = this.parts[0];
+                if (!head) return;
+
                 const isColor = this.skin.type === 'color';
                 const flagImg = !isColor ? cacheMap[this.skin.val] : null;
+                const isPlayerActiveBoost = (!this.isNPC && Date.now() < boostActiveUntil);
 
-                // Render Body Segments
                 for (let i = this.parts.length - 1; i >= 0; i--) {
                     let p = this.parts[i];
                     let r = thickness * (1 - i / (this.parts.length * 2.5));
                     if (i === 0) r = thickness + 2; 
                     let size = r * 2;
+
+                    if (isPlayerActiveBoost) {
+                        ctx.shadowBlur = 12;
+                        ctx.shadowColor = "#00f2fe";
+                    }
 
                     if (isColor) {
                         ctx.fillStyle = this.skin.val;
@@ -500,22 +579,20 @@
                         ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(this.angle);
                         ctx.drawImage(flagImg, -r, -r, size, size); ctx.restore();
                     }
+                    ctx.shadowBlur = 0; 
                 }
 
-                // Render Emoji Face perfectly centered and rotated on head
-                let head = this.parts[0];
                 let currentFace = this.isNPC ? this.npcEmoji : selectedEmojiFace;
                 
                 ctx.save();
                 ctx.translate(head.x, head.y);
-                ctx.rotate(this.angle + Math.PI/2); // Align emoji top direction orientation
+                ctx.rotate(this.angle + Math.PI/2);
                 ctx.font = `${thickness * 2.1}px Arial`;
                 ctx.textAlign = "center";
                 ctx.textBaseline = "middle";
                 ctx.fillText(currentFace, 0, 0);
                 ctx.restore();
 
-                // Render Floating Username Label Above Snake Head
                 ctx.save();
                 ctx.fillStyle = "rgba(255, 255, 255, 0.85)";
                 ctx.font = "bold 12px 'Segoe UI', Arial, sans-serif";
@@ -527,20 +604,31 @@
         }
 
         function dropPointsOnDeath(parts, skinColor) {
+            let verifiedColor = (skinColor && skinColor.startsWith("#")) ? skinColor : "#00ff88";
+            
             parts.forEach((part, index) => {
                 if (index % 2 === 0) { 
+                    let scatterRadius = 60; 
                     foodArray.push({
-                        x: part.x + (Math.random() * 14 - 7),
-                        y: part.y + (Math.random() * 14 - 7),
-                        color: skinColor || "#00ff88",
-                        isSuper: Math.random() < 0.12,
-                        baseRadius: 7
+                        x: part.x + (Math.random() * scatterRadius * 2 - scatterRadius),
+                        y: part.y + (Math.random() * scatterRadius * 2 - scatterRadius),
+                        color: verifiedColor,
+                        isSuper: Math.random() < 0.20, 
+                        baseRadius: 8
                     });
                 }
             });
         }
 
-        // Unified Universal Event Handlers for Mouse + Mobile Touch Triggers
+        function tryActivateBoost() {
+            if (inMenu || gameOver || !gameStarted) return;
+            let now = Date.now();
+            if (now - lastBoostTime >= boostCooldownMs) {
+                lastBoostTime = now;
+                boostActiveUntil = now + boostDurationMs;
+            }
+        }
+
         function handleSteerInput(clientX, clientY) {
             if (inMenu) return;
             gameStarted = true;
@@ -548,25 +636,43 @@
             mouse.y = clientY;
         }
 
+        // Mouse Controls (Desktop Fallback)
+        window.addEventListener('click', (e) => {
+            if(e.target.closest('#start-screen') || e.target.closest('#game-over-screen')) return;
+            tryActivateBoost();
+        });
         window.addEventListener('mousemove', (e) => { if(!isDrawingTouch) handleSteerInput(e.clientX, e.clientY); });
         
+        // Touch Controls (Mobile Native Optimization)
         window.addEventListener('touchstart', (e) => {
+            // Protect UI buttons from triggering vector movements
+            if(e.target.closest('#start-screen') || e.target.closest('#game-over-screen')) return;
+            
             isDrawingTouch = true;
             const touch = e.touches[0];
             touchIndicator.style.display = "block";
             touchIndicator.style.left = `${touch.clientX}px`;
             touchIndicator.style.top = `${touch.clientY}px`;
             handleSteerInput(touch.clientX, touch.clientY);
-        }, { passive: true });
+
+            // High accuracy mobile double-tap recognition engine with zoom protection
+            let now = Date.now();
+            if (now - lastTapTime < 300) {
+                e.preventDefault(); // Kills browser zooming action instantly
+                tryActivateBoost();
+            }
+            lastTapTime = now;
+        }, { passive: false }); // Set to false to allow preventDefault layout hooks
 
         window.addEventListener('touchmove', (e) => {
+            if(e.target.closest('#start-screen') || e.target.closest('#game-over-screen')) return;
             const touch = e.touches[0];
             touchIndicator.style.left = `${touch.clientX}px`;
             touchIndicator.style.top = `${touch.clientY}px`;
             handleSteerInput(touch.clientX, touch.clientY);
         }, { passive: true });
 
-        window.addEventListener('touchend', () => { touchIndicator.style.display = "none"; }, { passive: true });
+        window.addEventListener('touchend', () => { touchIndicator.style.display = "none"; isDrawingTouch = false; }, { passive: true });
 
         function findClosestFood(head) {
             let closest = null, minDist = Infinity;
@@ -581,49 +687,79 @@
         function spawnFood() {
             let isSuper = Math.random() < 0.10; 
             return {
-                x: Math.random() * (canvas.width - 60) + 30,
-                y: Math.random() * (canvas.height - 60) + 30,
+                x: Math.random() * (arenaWidth - 60) + 30,
+                y: Math.random() * (arenaHeight - 60) + 30,
                 color: isSuper ? "#ffffff" : `hsl(${Math.random() * 360}, 100%, 60%)`,
                 isSuper: isSuper,
                 baseRadius: isSuper ? 11 : 7 
             };
         }
 
+        function updateBoostHUD() {
+            if (inMenu || gameOver) return;
+            let now = Date.now();
+            if (now < boostActiveUntil) {
+                boostNotifier.innerText = "⚡ BOOST ACTIVE! ⚡";
+                boostNotifier.className = "boost-active";
+            } else {
+                let timePassed = now - lastBoostTime;
+                if (timePassed >= boostCooldownMs) {
+                    boostNotifier.innerText = "BOOST READY (Double Tap / Click)";
+                    boostNotifier.className = "boost-ready";
+                } else {
+                    let remaining = Math.ceil((boostCooldownMs - timePassed) / 1000);
+                    boostNotifier.innerText = `Boost Charging... (${remaining}s)`;
+                    boostNotifier.className = "boost-charging";
+                }
+            }
+        }
+
         function setupArenaEnvironment() {
             score = 0; gameOver = false; gameStarted = false;
-            scoreElement.innerText = score;
+            lastBoostTime = 0; boostActiveUntil = 0; 
+            if(scoreElement) scoreElement.innerText = score;
             forceResize();
 
-            let startX = canvas.width / 2;
-            let startY = inMenu ? canvas.height / 2 + 150 : canvas.height / 2;
+            let startX = arenaWidth / 2;
+            let startY = arenaHeight / 2;
 
-            let pName = playerNameInput.value.trim() || "Player";
+            let pName = playerNameInput ? playerNameInput.value.trim() : "Player Snake";
             player = new Snake("player", startX, startY, selectedSkin, false, pName);
-            foodArray = Array.from({ length: 30 }, spawnFood);
             
-            const npcColors = ["#be2edd", "#f0932b", "#eb4d4b", "#70a1ff", "#eccc68"];
-            npcs = npcColors.map((col, idx) => {
-                let rx = Math.random() * canvas.width;
-                let ry = Math.random() * canvas.height;
-                return new Snake(`npc-${idx}`, rx, ry, { type: 'color', val: col }, true);
-            });
+            foodArray = Array.from({ length: 300 }, spawnFood);
+            
+            const npcColors = ["#be2edd", "#f0932b", "#eb4d4b", "#70a1ff", "#eccc68", "#00f2fe", "#ff4757", "#ffa502"];
+            npcs = [];
+            for (let idx = 0; idx < 25; idx++) {
+                let rx = Math.random() * arenaWidth;
+                let ry = Math.random() * arenaHeight;
+                let randomColor = npcColors[idx % npcColors.length];
+                npcs.push(new Snake(`npc-${idx}`, rx, ry, { type: 'color', val: randomColor }, true));
+            }
         }
 
         function startGame() {
             inMenu = false;
-            startScreen.style.display = "none";
-            uiLayer.style.display = "block";
-            player.name = playerNameInput.value.trim() || "Player";
-            player.parts.forEach(p => { p.x = canvas.width / 2; p.y = canvas.height / 2; });
+            if(startScreen) startScreen.style.display = "none";
+            if(uiLayer) uiLayer.style.display = "block";
+            if(player) {
+                player.name = playerNameInput.value.trim() || "Player";
+                player.parts.forEach(p => { p.x = arenaWidth / 2; p.y = arenaHeight / 2; });
+            }
+            lastBoostTime = Date.now() - 45000; 
         }
 
         function tryAgain() {
-            gameOverScreen.style.display = "none"; uiLayer.style.display = "block";
+            if(gameOverScreen) gameOverScreen.style.display = "none"; 
+            if(uiLayer) uiLayer.style.display = "block";
             inMenu = false; setupArenaEnvironment();
+            lastBoostTime = Date.now() - 45000;
         }
 
         function backToMenu() {
-            inMenu = true; gameOverScreen.style.display = "none"; startScreen.style.display = "flex";
+            inMenu = true; 
+            if(gameOverScreen) gameOverScreen.style.display = "none"; 
+            if(startScreen) startScreen.style.display = "flex";
             setupArenaEnvironment(); renderCustomizerItems();
         }
 
@@ -631,22 +767,47 @@
             ctx.fillStyle = "#070614"; ctx.fillRect(0, 0, canvas.width, canvas.height);
             pulseTime += 0.07; 
 
+            if(!player || !player.parts[0]) {
+                requestAnimationFrame(loop);
+                return;
+            }
+
+            updateBoostHUD();
+
+            let cameraX = player.parts[0].x - canvas.width / 2;
+            let cameraY = player.parts[0].y - canvas.height / 2;
+
+            const padding = 100; 
+            const viewportLeft = cameraX - padding;
+            const viewportRight = cameraX + canvas.width + padding;
+            const viewportTop = cameraY - padding;
+            const viewportBottom = cameraY + canvas.height + padding;
+
             if (inMenu) {
                 player.update();
             } else if (!gameOver) {
                 player.update();
                 npcs.forEach(npc => npc.update());
 
+                if (foodArray.length < 300) {
+                    foodArray.push(spawnFood());
+                }
+
                 foodArray.forEach((food, index) => {
                     let hitRadius = thickness + food.baseRadius;
-                    if (gameStarted && Math.hypot(player.parts[0].x - food.x, player.parts[0].y - food.y) < hitRadius) {
-                        score += food.isSuper ? 50 : 10; scoreElement.innerText = score;
-                        player.targetLength += food.isSuper ? 12 : 3;
-                        foodArray[index] = spawnFood();
+                    
+                    if (gameStarted && !inMenu) {
+                        if (Math.hypot(player.parts[0].x - food.x, player.parts[0].y - food.y) < hitRadius) {
+                            score += food.isSuper ? 50 : 10; 
+                            if(scoreElement) scoreElement.innerText = score;
+                            player.targetLength += food.isSuper ? 3 : 1;
+                            foodArray[index] = spawnFood();
+                        }
                     }
+                    
                     npcs.forEach(npc => {
-                        if (Math.hypot(npc.parts[0].x - food.x, npc.parts[0].y - food.y) < hitRadius) {
-                            npc.targetLength += food.isSuper ? 10 : 2;
+                        if (npc.parts[0] && Math.hypot(npc.parts[0].x - food.x, npc.parts[0].y - food.y) < hitRadius) {
+                            npc.targetLength += food.isSuper ? 2 : 1;
                             foodArray[index] = spawnFood();
                         }
                     });
@@ -657,41 +818,73 @@
                     npcs.forEach(npc => {
                         for (let i = 3; i < npc.parts.length; i++) {
                             if (Math.hypot(pHead.x - npc.parts[i].x, pHead.y - npc.parts[i].y) < thickness) {
-                                gameOver = true; uiLayer.style.display = "none";
-                                finalScoreElement.innerText = `Final Score: ${score}`;
-                                gameOverScreen.style.display = "flex";
+                                gameOver = true; 
+                                if(uiLayer) uiLayer.style.display = "none";
+                                if(finalScoreElement) finalScoreElement.innerText = `Final Score: ${score}`;
+                                if(gameOverScreen) gameOverScreen.style.display = "flex";
                                 dropPointsOnDeath(player.parts, player.skin.val);
                             }
                         }
                         let nHead = npc.parts[0];
-                        for (let i = 3; i < player.parts.length; i++) {
-                            if (Math.hypot(nHead.x - player.parts[i].x, nHead.y - player.parts[i].y) < thickness) {
-                                dropPointsOnDeath(npc.parts, npc.skin.val);
-                                npc.targetLength = 25; 
-                                npc.parts = Array.from({ length: 25 }, () => ({ x: Math.random() * canvas.width, y: Math.random() * canvas.height }));
+                        if(nHead) {
+                            for (let i = 3; i < player.parts.length; i++) {
+                                if (Math.hypot(nHead.x - player.parts[i].x, nHead.y - player.parts[i].y) < thickness) {
+                                    dropPointsOnDeath(npc.parts, npc.skin.val);
+                                    npc.targetLength = 20; 
+                                    npc.parts = Array.from({ length: 20 }, () => ({ x: Math.random() * arenaWidth, y: Math.random() * arenaHeight }));
+                                }
                             }
                         }
                     });
                 }
             }
 
+            ctx.save();
+            ctx.translate(-cameraX, -cameraY);
+
+            ctx.strokeStyle = "rgba(255, 255, 255, 0.04)";
+            ctx.lineWidth = 2;
+            const gridSpacer = 80;
+            
+            let startGridX = Math.max(0, Math.floor(viewportLeft / gridSpacer) * gridSpacer);
+            let endGridX = Math.min(arenaWidth, Math.ceil(viewportRight / gridSpacer) * gridSpacer);
+            for (let x = startGridX; x <= endGridX; x += gridSpacer) {
+                ctx.beginPath(); ctx.moveTo(x, Math.max(0, viewportTop)); ctx.lineTo(x, Math.min(arenaHeight, viewportBottom)); ctx.stroke();
+            }
+            
+            let startGridY = Math.max(0, Math.floor(viewportTop / gridSpacer) * gridSpacer);
+            let endGridY = Math.min(arenaHeight, Math.ceil(viewportBottom / gridSpacer) * gridSpacer);
+            for (let y = startGridY; y <= endGridY; y += gridSpacer) {
+                ctx.beginPath(); ctx.moveTo(Math.max(0, viewportLeft), y); ctx.lineTo(Math.min(arenaWidth, viewportRight), y); ctx.stroke();
+            }
+
             if (!inMenu) {
                 foodArray.forEach(f => {
-                    if (f.isSuper) {
-                        let animatedRadius = f.baseRadius + Math.sin(pulseTime) * 1.5;
-                        ctx.shadowBlur = 10; ctx.shadowColor = "#00f2fe";
-                        ctx.fillStyle = "#ffffff";
-                        ctx.beginPath(); ctx.arc(f.x, f.y, animatedRadius, 0, Math.PI * 2); ctx.fill();
-                        ctx.shadowBlur = 0; 
-                    } else {
-                        ctx.fillStyle = f.color;
-                        ctx.beginPath(); ctx.arc(f.x, f.y, f.baseRadius, 0, Math.PI * 2); ctx.fill();
+                    if (f.x >= viewportLeft && f.x <= viewportRight && f.y >= viewportTop && f.y <= viewportBottom) {
+                        if (f.isSuper) {
+                            let animatedRadius = f.baseRadius + Math.sin(pulseTime) * 1.5;
+                            ctx.shadowBlur = 10; ctx.shadowColor = "#00f2fe";
+                            ctx.fillStyle = "#ffffff";
+                            ctx.beginPath(); ctx.arc(f.x, f.y, animatedRadius, 0, Math.PI * 2); ctx.fill();
+                            ctx.shadowBlur = 0; 
+                        } else {
+                            ctx.fillStyle = f.color;
+                            ctx.beginPath(); ctx.arc(f.x, f.y, f.baseRadius, 0, Math.PI * 2); ctx.fill();
+                        }
                     }
                 });
-                npcs.forEach(npc => npc.draw());
+
+                npcs.forEach(npc => {
+                    let h = npc.parts[0];
+                    if (h && h.x >= viewportLeft && h.x <= viewportRight && h.y >= viewportTop && h.y <= viewportBottom) {
+                        npc.draw();
+                    }
+                });
             }
 
             player.draw(); 
+            ctx.restore();
+
             requestAnimationFrame(loop);
         }
 
